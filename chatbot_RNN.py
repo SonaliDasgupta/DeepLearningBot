@@ -6,5 +6,5 @@ This is a temporary script file.
 """
 import os
 os.chdir('/home/admin1/DeepLearningBot')
-import chatbot
+import chatbot_NLP_preprocessing
 
