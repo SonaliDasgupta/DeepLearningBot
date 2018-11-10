@@ -36,8 +36,8 @@ class Seq2SeqModel:
         
         #add bidirectional later
         encoder_outputs, encoder_state = tf.nn.dynamic_rnn(cell = encoder_cell,
-                                                                   
-                                                                         inputs = rnn_inputs,
+                                                                      
+                                                               inputs = rnn_inputs,
                                                                          sequence_length = seq_length,                 
                                                                          dtype = tf.float32)
         print "ENCODER OUTPUT:"+ str(encoder_outputs)
