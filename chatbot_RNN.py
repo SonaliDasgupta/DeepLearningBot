@@ -89,32 +89,58 @@ class Seq2SeqModel:
       rnn_out, sample_id = outputs
       rnn_out = tf.to_float(rnn_out)
       decoder_output_dropout = tf.nn.dropout(rnn_out, keep_prob)
-     # print 'OUTPUT SHAPE: '+str(tf.shape(outputs))
-    #  outputs = [tf.to_float(output) for output in outputs]
-   #   print 'OUTPUT SHAPE: '+str(tf.shape(outputs))
-      #Apply Dropout later
-  #    decoder_output_dropout = tf.nn.dropout(outputs, keep_prob)
+    
       return decoder_output_dropout
-   #   return output_function(decoder_output_dropout)
+   
 
 
     #Decoding test/Validation Set
     def decodeTestValidationSet(self, encoder_outputs, encoder_state, decoder_cell, decoder_embeddings_matrix, sos_id, eos_id, maximum_length, num_words,
-                                decoding_scope, output_function, batch_size):
+                                decoding_scope, output_function, batch_size, sample_fn, rnn_size, num_layers):
+      
         attention_states = tf.zeros([batch_size, 1, decoder_cell.output_size])
-      #  attention_mechanism = tf.contrib.seq2seq.LuongAttention(num_units = decoder_cell.output_size, attention_states, memory_sequence_length = maximum_length)
-        attention_keys, attention_values, attention_score_function, attention_construct_function = tf.contrib.seq2seq.AttentionWrapper(attention_states, num_units = decoder_cell.output_size, batch_size = batch_size)
-        test_decoder_function = tf.contrib.seq2seq.attention_decoder_fn_inference(
-                output_function, encoder_state[0], attention_keys, attention_values, attention_score_function,
-                attention_construct_function, decoder_embeddings_matrix, sos_id, eos_id, maximum_length, num_words, name = "attn_dec_inf")
-        test_predictions, decoder_final_state, decoder_final_context_state = tf.contrib.seq2seq.dynamic_rnn_decoder(decoder_cell, 
-                                                                                                              test_decoder_function,
-                                                                                                              decoding_scope)
+        projection_layer = tf.layers.Dense(units = len(answersint2words), use_bias=True)
+        num_units = rnn_size * num_layers
+            # attention_states = tf.transpose(encoder_outputs, [batch_size, 0, rnn_size])
+
+       
+     
+        attention_mech = tf.contrib.seq2seq.BahdanauAttention(num_units = num_units, 
+                                                    
+                                                     memory = encoder_outputs,
+                                                     memory_sequence_length = maximum_length)
+      
+        attn_cell = tf.contrib.seq2seq.AttentionWrapper(
+                cell = decoder_cell,# Instance of RNNCell
+                attention_mechanism = attention_mech, # Instance of AttentionMechanism
+                attention_layer_size = num_units/2, # Int, depth of attention (output) tensor
+                name="attention_wrapper")
+       
+        
+       
+        _start_inputs = tf.nn.embedding_lookup(decoder_embeddings_matrix, sos_id)
+        
+        def _next_inputs_fn(sample_ids):
+            return tf.nn.embedding_lookup(decoder_embeddings_matrix, sample_ids)
+        
+        helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(
+                        decoder_embeddings_matrix, start_tokens=[sos_id]*batch_size, end_token=eos_id)
+        out_cell = tf.contrib.rnn.OutputProjectionWrapper(
+                attn_cell, len(answersint2words), reuse = tf.AUTO_REUSE
+                )
+        
+        decoder = tf.contrib.seq2seq.BasicDecoder(out_cell,
+                                                  helper,
+                                                  out_cell.zero_state(batch_size, tf.float32).clone(cell_state=encoder_state),
+                                                  output_layer = projection_layer)
+        
+        test_predictions, decoder_final_state, decoder_final_context_state = tf.contrib.seq2seq.dynamic_decode(decoder, 
+                                                                                                              maximum_iterations = 100)
         return test_predictions
 
     #Decoder RNN Layer
     def decoderRNN(self, decoder_embedded_input, decoder_embeddings_matrix, encoder_outputs, encoder_state, num_words, sequence_length, rnn_size, num_layers, word2int, keep_prob, batch_size):
-        with tf.variable_scope('decoding') as decoding_scope:
+        with tf.variable_scope('decoding', reuse = tf.AUTO_REUSE) as decoding_scope:
             lstm1 = tf.contrib.rnn.BasicLSTMCell(rnn_size)
             lstm_dropout1 = [tf.contrib.rnn.DropoutWrapper(lstm1, input_keep_prob = keep_prob)]
            # layers = [tf.contrib.rnn.DropoutWrapper(lstm, input_keep_prob = keep_prob)
@@ -128,6 +154,11 @@ class Seq2SeqModel:
          #   decoder_cell = tf.contrib.rnn.MultiRNNCell([lstm_dropout]*num_layers)
             weights = tf.truncated_normal_initializer(stddev = 0.1)
             biases = tf.zeros_initializer()
+            def _sample_fn(decoder_outputs):
+                return decoder_outputs
+            
+            
+            
             output_function = lambda x: tf.contrib.layers.fully_connected(x,
                                                                           num_words,
                                                                           None,
@@ -142,8 +173,8 @@ class Seq2SeqModel:
                                                  keep_prob,
                                                  batch_size,
                                                  rnn_size, num_layers)
-            print 'TRAINING PREDS: '+str(training_predictions)
-            decoding_scope.reuse_variables()
+            #print 'TRAINING PREDS: '+str(training_predictions)
+           
             test_predictions = self.decodeTestValidationSet(encoder_outputs, encoder_state,
                                                    decoder_cell,
                                                    decoder_embeddings_matrix,
@@ -153,8 +184,12 @@ class Seq2SeqModel:
                                                    num_words,
                                                    decoding_scope,
                                                    output_function,
-                                                   keep_prob,
-                                                   batch_size)
+                                                   batch_size,
+                                                   _sample_fn,
+                                                   rnn_size,
+                                                   num_layers
+                                                   )
+            print 'TEST PREDS: '+str(test_predictions)
             return training_predictions, test_predictions
     
 
