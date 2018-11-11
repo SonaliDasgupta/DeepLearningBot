@@ -13,7 +13,7 @@ class Seq2SeqModel:
         inputs = tf.placeholder(tf.int32, [None, None], name = 'input')
         targets = tf.placeholder(tf.int32, [None, None], name = 'target')
         lr = tf.placeholder(tf.float32, name = 'learning_rate')
-        keep_prob = tf.placeholder_with_default(0.5, None, name = 'keep_prob')
+        keep_prob = tf.placeholder(tf.float32, [], name = 'keep_prob')
        
         return inputs, targets, lr, keep_prob
 
