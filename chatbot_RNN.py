@@ -53,6 +53,7 @@ class Seq2SeqModel:
     def decodeTrainingSet(self, encoder_outputs, encoder_state, decoder_cell, decoder_embedded_input, sequence_length,
                           decoding_scope, output_function, keep_prob, batch_size, rnn_size, num_layers):
       projection_layer = tf.layers.Dense(units = len(answersint2words), use_bias=True)
+     # projection_layer = tf.contrib.layers.fully_connected(decoder_embedded_input, len(answersint2words), )
       num_units = rnn_size * num_layers
      # attention_states = tf.transpose(encoder_outputs, [batch_size, 0, rnn_size])
 
@@ -96,47 +97,53 @@ class Seq2SeqModel:
 
     #Decoding test/Validation Set
     def decodeTestValidationSet(self, encoder_outputs, encoder_state, decoder_cell, decoder_embeddings_matrix, sos_id, eos_id, maximum_length, num_words,
-                                decoding_scope, output_function, batch_size, sample_fn, rnn_size, num_layers):
+                                decoding_scope, output_function, batch_size, rnn_size, num_layers):
       
-        attention_states = tf.zeros([batch_size, 1, decoder_cell.output_size])
+        beam_width = 3
+      #  attention_states = tf.zeros([batch_size, 1, decoder_cell.output_size])
         projection_layer = tf.layers.Dense(units = len(answersint2words), use_bias=True)
         num_units = rnn_size * num_layers
             # attention_states = tf.transpose(encoder_outputs, [batch_size, 0, rnn_size])
 
        
      
+       
+       
+        
+        tiled_encoder_outputs = tf.contrib.seq2seq.tile_batch(encoder_outputs, multiplier = 3) #Using beam width 3 for now
+        tiled_encoder_state = tf.contrib.seq2seq.tile_batch(encoder_state, multiplier = beam_width)
+        tiled_sequence_length = tf.contrib.seq2seq.tile_batch(maximum_length, multiplier = beam_width)
         attention_mech = tf.contrib.seq2seq.BahdanauAttention(num_units = num_units, 
                                                     
-                                                     memory = encoder_outputs,
-                                                     memory_sequence_length = maximum_length)
+                                                     memory = tiled_encoder_outputs,
+                                                     memory_sequence_length = tiled_sequence_length)
       
         attn_cell = tf.contrib.seq2seq.AttentionWrapper(
                 cell = decoder_cell,# Instance of RNNCell
                 attention_mechanism = attention_mech, # Instance of AttentionMechanism
                 attention_layer_size = num_units/2, # Int, depth of attention (output) tensor
                 name="attention_wrapper")
+        
+        decoder_initial_state = attn_cell.zero_state(dtype = tf.float32, batch_size = batch_size * beam_width)
+        decoder_initial_state = decoder_initial_state.clone(cell_state = tiled_encoder_state)
        
-        
-       
-        _start_inputs = tf.nn.embedding_lookup(decoder_embeddings_matrix, sos_id)
-        
-        def _next_inputs_fn(sample_ids):
-            return tf.nn.embedding_lookup(decoder_embeddings_matrix, sample_ids)
-        
-        helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(
-                        decoder_embeddings_matrix, start_tokens=[sos_id]*batch_size, end_token=eos_id)
         out_cell = tf.contrib.rnn.OutputProjectionWrapper(
                 attn_cell, len(answersint2words), reuse = tf.AUTO_REUSE
                 )
         
-        decoder = tf.contrib.seq2seq.BasicDecoder(out_cell,
-                                                  helper,
-                                                  out_cell.zero_state(batch_size, tf.float32).clone(cell_state=encoder_state),
-                                                  output_layer = projection_layer)
+        decoder = tf.contrib.seq2seq.BeamSearchDecoder(out_cell, 
+                                                       decoder_embeddings_matrix,
+                                                       [sos_id for _ in range(batch_size)],
+                                                       eos_id,
+                                                       decoder_initial_state,
+                                                       beam_width,
+                                                       output_layer = projection_layer
+                                                       
+                                                       )
         
         test_predictions, decoder_final_state, decoder_final_context_state = tf.contrib.seq2seq.dynamic_decode(decoder, 
                                                                                                               maximum_iterations = 100)
-        return test_predictions
+        return test_predictions[0]
 
     #Decoder RNN Layer
     def decoderRNN(self, decoder_embedded_input, decoder_embeddings_matrix, encoder_outputs, encoder_state, num_words, sequence_length, rnn_size, num_layers, word2int, keep_prob, batch_size):
@@ -154,8 +161,6 @@ class Seq2SeqModel:
          #   decoder_cell = tf.contrib.rnn.MultiRNNCell([lstm_dropout]*num_layers)
             weights = tf.truncated_normal_initializer(stddev = 0.1)
             biases = tf.zeros_initializer()
-            def _sample_fn(decoder_outputs):
-                return decoder_outputs
             
             
             
@@ -173,7 +178,7 @@ class Seq2SeqModel:
                                                  keep_prob,
                                                  batch_size,
                                                  rnn_size, num_layers)
-            #print 'TRAINING PREDS: '+str(training_predictions)
+            print 'TRAINING PREDS: '+str(training_predictions)
            
             test_predictions = self.decodeTestValidationSet(encoder_outputs, encoder_state,
                                                    decoder_cell,
@@ -185,7 +190,7 @@ class Seq2SeqModel:
                                                    decoding_scope,
                                                    output_function,
                                                    batch_size,
-                                                   _sample_fn,
+                                                   
                                                    rnn_size,
                                                    num_layers
                                                    )
