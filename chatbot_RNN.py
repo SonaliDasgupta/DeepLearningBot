@@ -218,7 +218,7 @@ class Seq2SeqModel:
                                                         questionswords2int,
                                                         keep_prob,
                                                         batch_size)
-        #return training_predictions, test_predictions"""
+        return training_predictions, test_predictions
     
     
     
