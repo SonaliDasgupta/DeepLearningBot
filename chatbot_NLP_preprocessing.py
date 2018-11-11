@@ -146,14 +146,3 @@ for length in range(1, 25+1):
             sorted_cleaned_questions.append(questions_to_int[i[0]])
             sorted_cleaned_answers.append(answers_to_int[i[0]])
             
-"""for i in enumerate(sorted_cleaned_questions):
-    if len(i[1]) == 2:
-        print i[0]
-        break"""
-    
-
-        
-
-    
-
-        

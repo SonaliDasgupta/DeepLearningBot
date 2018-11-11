@@ -220,8 +220,4 @@ class Seq2SeqModel:
                                                         keep_prob,
                                                         batch_size)
         return training_predictions, test_predictions
-    
-    
-    
-
-    
+        
