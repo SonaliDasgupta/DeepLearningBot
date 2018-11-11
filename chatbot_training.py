@@ -58,3 +58,27 @@ with tf.name_scope('optimization'):
     gradients = optimizer.compute_gradients(loss_error)
     clipped_gradients = [(tf.clip_by_value(grad_tensor, -5.0 , 5.0), grad_variable)  for grad_tensor, grad_variable in gradients if grad_tensor is not None]
     optimizer_grad_clipping = optimizer.apply_gradients(clipped_gradients)
+  
+    
+#Padding sequences with <PAD> token to make question and answer of same length#
+def applyPadding(batch_of_sequences, word2int):
+    max_sequence_length = max([len(sequence) for sequence in batch_of_sequences])
+    return [sequence + [word2int['<PAD>']]*(max_sequence_length - len(sequence)) for sequence in batch_of_sequences]
+   
+    
+#splitting the data into batches of questions and answers
+import numpy as np
+def splitIntoBatches(questions, answers, batch_size):
+   
+    numBatches = len(questions)//batch_size
+    
+    for batch_num in range(numBatches):
+        current = batch_num * batch_size
+        temp_batch_questions = [questions[current : (current + batch_size)]]
+        temp_batch_answers = [answers[current : (current + batch_size)]]
+        padded_batch_questions = np.array(applyPadding(temp_batch_questions, questionswords2int))
+        padded_batch_answers = np.array(applyPadding(temp_batch_answers, answerswords2int))
+        yield padded_batch_questions, padded_batch_answers
+   
+    
+        
